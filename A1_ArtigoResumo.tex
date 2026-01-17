@@ -1,0 +1,540 @@
+% !TeX program = pdflatex
+% Projeto Final - Inteligencia Artificial (UFC)
+% Artigo tipo survey em formato LNCS (portugues)
+%
+% ============== INSTRUCOES DE COMPILACAO ==============
+% Para que as referencias aparecam corretamente, compile na ordem:
+%   1. pdflatex A1_ArtigoResumo.tex
+%   2. bibtex A1_ArtigoResumo
+%   3. pdflatex A1_ArtigoResumo.tex
+%   4. pdflatex A1_ArtigoResumo.tex
+%
+% No Overleaf: basta recompilar 2x que funciona automaticamente.
+% ======================================================
+%
+% ATENCAO: O enunciado permite maximo de 5 integrantes.
+% Se o grupo tiver 6 pessoas, confirmar com o professor ou ajustar a lista abaixo.
+%
+
+\documentclass[runningheads]{llncs}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\tcbuselibrary{listings,skins}
+
+% Estilo para caixas de exemplo de ataque
+\newtcolorbox{attackbox}[1][]{
+  colback=red!5,
+  colframe=red!50!black,
+  fonttitle=\bfseries\footnotesize,
+  title=#1,
+  boxrule=0.5pt,
+  arc=2pt,
+  left=3pt,
+  right=3pt,
+  top=2pt,
+  bottom=2pt
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\title{Prompt Injection em LLMs e Sistemas Ag\^enticos:\\Taxonomia, Avalia\c{c}\~ao e Defesas em Profundidade}
+
+\author{Arthur Ant\^onio Brito da Costa\inst{1} \and
+Lia Linhares Carvalhedo\inst{1} \and
+Jos\'e Vitor de Albuquerque Coelho Santos\inst{1} \and
+Jo\~ao Vitor Mesquita Gouveia\inst{1} \and
+Luis Ant\^onio Andrade de Albuquerque\inst{1} \and
+Caio de Ara\'ujo Mac\^edo\inst{1}}
+
+\institute{Universidade Federal do Cear\'a (UFC), Departamento de Computa\c{c}\~ao,\\
+Fortaleza, CE, Brasil}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Modelos de Linguagem de Grande Porte (LLMs) e sistemas ag\^enticos baseados em LLMs t\^em sido integrados a aplica\c{c}\~oes reais (assistentes, RAG, copilots, automa\c{c}\~ao). Essa integra\c{c}\~ao amplia a superf\'icie de ataque e torna o \emph{prompt injection} um risco priorit\'ario em seguran\c{c}a, pois a mesma cadeia de texto pode conter tanto instru\c{c}\~oes confi\'aveis quanto dados n\~ao confi\'aveis. Este artigo apresenta um \emph{survey} (revis\~ao) sobre prompt injection e amea\c{c}as correlatas em LLMs e agentes, sintetizando 10 trabalhos selecionados (2023--2026) e o guia OWASP Top~10 for LLM Applications 2025. Propomos uma taxonomia unificada por vetores de entrega (direto, indireto e via ferramentas), modalidades (texto e multimodal), e comportamento de propaga\c{c}\~ao (recurs\~ao, infec\c{c}\~ao e \emph{worms}). Organizamos as principais estrat\'egias de defesa (engenharia de prompt, filtragem/valida\c{c}\~ao, controle de privil\'egio e isolamento arquitetural) e discutimos como avali\'a-las usando conjuntos de dados e benchmarks recentes (Tensor Trust e HackAPrompt), destacando trade-offs entre utilidade e robustez. Por fim, sistematizamos desafios abertos para seguran\c{c}a em agentes (ex.: excesso de autonomia, contamina\c{c}\~ao de contexto e ataques h\'ibridos) e dire\c{c}\~oes futuras.
+\keywords{seguran\c{c}a em IA \and LLM \and prompt injection \and agentes \and RAG \and OWASP}
+\end{abstract}
+
+\section{Introdu\c{c}\~ao}
+A ado\c{c}\~ao de LLMs em produtos e processos (assist\^entes de texto, \emph{retrieval-augmented generation}---RAG, e agentes com \emph{tool use}) transformou o modo como organiza\c{c}\~oes buscam informa\c{c}\~ao, geram conte\'udo e executam tarefas. Ao mesmo tempo, essa mudan\c{c}a exp\~oe uma vulnerabilidade estrutural: diferentemente de software tradicional, LLMs processam instru\c{c}\~oes e dados como uma \emph{sequ\^encia de tokens} sem fronteiras sint\'aticas confi\'aveis entre ``c\'odigo'' e ``dados''. Esse desalinhamento entre flexibilidade e controle torna ataques de \emph{prompt injection} (PI) um problema central de seguran\c{c}a.
+
+O OWASP Top~10 for LLM Applications 2025 classifica \emph{Prompt Injection} como LLM01:2025, destacando que entradas podem alterar comportamento/sa\'ida do modelo de formas n\~ao intencionais, inclusive com instru\c{c}\~oes impercept\'iveis a humanos (por exemplo, embutidas em conte\'udo externo) \cite{owasp2025top10}. Em aplica\c{c}\~oes integradas a ferramentas, o impacto pode ir al\'em de texto: o modelo pode disparar chamadas a APIs, acessar dados sens\'iveis e atuar como ``deputado confuso'' (\emph{confused deputy}), executando a vontade do atacante com credenciais leg\'itimas.
+
+A literatura recente mostra (i) ataque indireto via conte\'udo externo (web/documentos) \cite{greshake2023indirect}, (ii) ataques em escala com competi\c{c}\~oes e datasets que revelam padr\~oes de jailbreak/extra\c{c}\~ao/hijack \cite{toyer2023tensortrust,schulhoff2024hackaprompt}, (iii) ataques e consequ\^encias em aplica\c{c}\~oes comerciais \cite{liu2025houyi}, (iv) defesa via t\'ecnicas de \emph{prompt engineering} robustas, como \emph{spotlighting} \cite{hines2024spotlighting}, e (v) evolu\c{c}\~ao do cen\'ario para amea\c{c}as h\'ibridas combinando PI com vulnerabilidades cl\'assicas (XSS/CSRF etc.) em sistemas ag\^enticos \cite{mchugh2025promptinjection20}. Revis\~oes recentes sintetizam esse panorama e apontam lacunas de padroniza\c{c}\~ao e avalia\c{c}\~ao \cite{naik2025threatlandscape,gulyamov2026review}.
+
+\textbf{Contribui\c{c}\~oes deste artigo.} A partir de uma revis\~ao sistem\'atica de 10 trabalhos e relat\'orio OWASP, este survey:
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+\item prop\~oe uma taxonomia unificada para prompt injection e ataques correlatos em LLMs e agentes;
+\item organiza defesas por camadas (engenharia de prompt, filtros/valida\c{c}\~oes, e controles arquiteturais) e discute trade-offs;
+\item sumariza pr\'aticas de avalia\c{c}\~ao e recursos abertos (datasets/benchmarks) para medir robustez;
+\item destaca desafios abertos e dire\c{c}\~oes de pesquisa para seguran\c{c}a de agentes.
+\end{enumerate}
+
+\section{Trabalhos relacionados}
+Al\'em de estudos isolados de ataque e defesa, t\^em surgido guias e revis\~oes que tentam organizar o campo de seguran\c{c}a em LLMs. O \textbf{OWASP Top~10 for LLM Applications 2025} consolida uma taxonomia orientada a risco (LLM01--LLM10) e recomenda controles pr\'aticos para sistemas em produ\c{c}\~ao, como valida\c{c}\~ao de sa\'ida, privil\'egio m\'inimo e filtros de entrada/sa\'ida \cite{owasp2025top10}.
+
+No \^ambito acad\^emico, Naik et al. apresentam um panorama mais amplo de ataques adversariais em IA generativa, incluindo prompt injection, envenenamento de dados e amea\c{c}as relacionadas a RAG \cite{naik2025threatlandscape}. Gulyamov et al. oferecem uma revis\~ao abrangente de 2023--2025 com foco em prompt injection em LLMs e agentes, discutindo vetores diretos e indiretos, riscos em ecossistemas de agentes e a necessidade de \emph{defense-in-depth} \cite{gulyamov2026review}.
+
+Este artigo difere desses trabalhos ao (i) sintetizar, em um recorte compacto de 10 estudos selecionados, uma \textbf{taxonomia operacional} alinhada ao OWASP e (ii) conectar explicitamente vetores de ataque, camadas de defesa e pr\'aticas de avalia\c{c}\~ao (datasets/benchmarks), visando apoiar um leitor que precisa projetar ou auditar aplica\c{c}\~oes com LLMs e agentes.
+
+\section{Metodologia: revis\~ao sistem\'atica da literatura}
+Esta se\c{c}\~ao descreve o protocolo de busca e sele\c{c}\~ao (Atividade~1), de forma rastre\'avel e reproduz\'ivel.
+
+\subsection{Perguntas de pesquisa}
+Definimos as seguintes quest\~oes:
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+\item \textbf{RQ1:} Quais s\~ao os principais vetores de prompt injection em aplica\c{c}\~oes com LLMs (direto, indireto e h\'ibrido)?
+\item \textbf{RQ2:} Quais impactos e objetivos aparecem com mais frequ\^encia (exfiltra\c{c}\~ao, \emph{goal hijacking}, execu\c{c}\~ao de a\c{c}\~oes via ferramentas, degrada\c{c}\~ao/DoS)?
+\item \textbf{RQ3:} Como os trabalhos avaliam ataques e defesas (m\'etricas, datasets, setups experimentais)?
+\item \textbf{RQ4:} Quais estrat\'egias de mitiga\c{c}\~ao existem e quais trade-offs envolvem (custo computacional, falsos positivos, perda de utilidade)?
+\item \textbf{RQ5:} O que muda quando h\'a integra\c{c}\~ao com RAG e/ou agentes com ferramentas (\emph{tool use})?
+\end{itemize}
+
+\subsection{Fontes e strings de busca}
+\textbf{Bases/Fontes consultadas (sugest\~ao para reprodu\c{c}\~ao):} arXiv, Google Scholar, IEEE Xplore, ACM Digital Library e busca por \emph{snowballing} (refer\^encias e cita\c{c}\~oes) em trabalhos centrais.\\
+\textbf{String de busca base (exemplo):}
+\begin{quote}
+("prompt injection" OR jailbreak OR "indirect prompt injection" OR "prompt leaking" OR "prompt extraction" OR "tool poisoning") AND (LLM OR "large language model" OR agent OR RAG)
+\end{quote}
+\textbf{Filtros (exemplo):} 2023--2026; artigos/reports com texto completo; foco em seguran\c{c}a (ataques, taxonomia, defesa ou avalia\c{c}\~ao).
+
+\subsection{Crit\'erios de inclus\~ao e exclus\~ao}
+\textbf{Inclus\~ao:} (i) aborda prompt injection em LLMs/agents/RAG; (ii) apresenta taxonomia, dataset/benchmark, estudo emp\'irico, incidente documentado ou defesa avaliada; (iii) texto completo dispon\'ivel.\\
+\textbf{Exclus\~ao:} (i) conte\'udo opinativo sem m\'etodo; (ii) sem rela\c{c}\~ao com LLMs; (iii) duplicatas; (iv) sem contribui\c{c}\~ao t\'ecnica (ex.: apenas tutorial).
+
+\subsection{Processo de triagem}
+A triagem foi feita em tr\^es etapas: (1) deduplica\c{c}\~ao; (2) leitura de t\'itulo/resumo; (3) leitura de texto completo. A lista final incluiu 10 trabalhos (Tabela~\ref{tab:estudos}).\\
+\textbf{Observa\c{c}\~ao:} os valores num\'ericos do fluxograma PRISMA devem ser preenchidos pelo grupo conforme o log real da busca.
+
+\begin{figure}[t]
+\centering
+\fbox{\begin{minipage}{0.95\textwidth}
+\small
+\textbf{Fluxo PRISMA (preencher com seus n\'umeros reais).}\\
+Identifica\c{c}\~ao: registros encontrados (n=\texttt{N1}).\\
+Deduplica\c{c}\~ao: duplicatas removidas (n=\texttt{Ndup}); registros para triagem (n=\texttt{N2}).\\
+Triagem t\'itulo/resumo: exclu\'idos (n=\texttt{Nex1}); eleg\'iveis para texto completo (n=\texttt{N3}).\\
+Texto completo: exclu\'idos com motivo (n=\texttt{Nex2}); inclu\'idos (n=10).
+\end{minipage}}
+\caption{Diagrama PRISMA simplificado (modelo para Atividade~1).}
+\label{fig:prisma}
+\end{figure}
+
+\subsection{Lista final de trabalhos analisados}
+A Tabela~\ref{tab:estudos} resume os 10 trabalhos selecionados, classificando-os por tipo (ataque, defesa, benchmark, revis\~ao/diretriz), cen\'ario-alvo e vetor principal de ataque abordado.
+
+\begin{table}[t]
+\centering
+\caption{Extra\c{c}\~ao de dados dos estudos selecionados (2023--2026).}
+\label{tab:estudos}
+\footnotesize
+\begin{tabular}{p{2.2cm} p{1.6cm} p{2.0cm} p{1.8cm} p{3.6cm}}
+\toprule
+\textbf{Refer\^encia} & \textbf{Tipo} & \textbf{Cen\'ario} & \textbf{Vetor} & \textbf{Achados principais}\\
+\midrule
+OWASP 2025 \cite{owasp2025top10} & Diretriz & Apps com LLMs & Todos & Top 10 riscos; LLM01 = PI; boas pr\'aticas\\
+Greshake et al. \cite{greshake2023indirect} & Ataque & Apps integrados & Indireto & Ataques em Bing Chat; worming; contamina\c{c}\~ao\\
+Liu et al. \cite{liu2025houyi} & Ataque & 36 apps reais & Direto/Ind. & HOUYI; 31 vulner\'aveis; prompt theft\\
+Toyer et al. \cite{toyer2023tensortrust} & Benchmark & LLMs gerais & Direto & 126k ataques; extraction/hijacking\\
+Schulhoff et al. \cite{schulhoff2024hackaprompt} & Benchmark & Chatbots & Direto & 600k+ prompts; ontologia de hacking\\
+Hines et al. \cite{hines2024spotlighting} & Defesa & Prompts multi-fonte & Indireto & Spotlighting; ASR: 50\%$\to$2\%\\
+McHugh et al. \cite{mchugh2025promptinjection20} & An\'alise & Agentes/enterprise & H\'ibrido & PI + XSS/CSRF; worms; isolamento\\
+Naik et al. \cite{naik2025threatlandscape} & Survey & Gen AI/LLMs & V\'arios & Panorama amplo; compara\c{c}\~ao com ataques web\\
+Kalliom\"aki \cite{kalliomaki2025agents} & Tese & Agentes LLM & V\'arios & Aplica\c{c}\~oes por ind\'ustria; riscos de agentes\\
+Gulyamov et al. \cite{gulyamov2026review} & Review & LLMs + agentes & Direto/Ind. & 45 fontes; MCP; PALADIN; defense-in-depth\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Os trabalhos cobrem tr\^es perspectivas complementares: (i)~estudos de ataque com demonstra\c{c}\~oes emp\'iricas \cite{greshake2023indirect,liu2025houyi}; (ii)~benchmarks e competi\c{c}\~oes que geram dados em escala \cite{toyer2023tensortrust,schulhoff2024hackaprompt}; e (iii)~revis\~oes e diretrizes que sintetizam o estado da arte \cite{owasp2025top10,naik2025threatlandscape,gulyamov2026review}. A defesa de Hines et al. \cite{hines2024spotlighting} e a an\'alise de amea\c{c}as h\'ibridas de McHugh et al. \cite{mchugh2025promptinjection20} representam contribui\c{c}\~oes espec\'ificas para mitiga\c{c}\~ao e modelagem de riscos emergentes.
+
+\section{Fundamentos: LLM-integrated apps, RAG e agentes}
+\subsection{Arquiteturas t\'ipicas e pontos de inje\c{c}\~ao}
+Sistemas modernos com LLMs frequentemente seguem um pipeline: (i) \textbf{prompt do sistema} (pol\'iticas, papel do agente), (ii) \textbf{entrada do usu\'ario}, (iii) \textbf{contexto externo} (RAG: documentos recuperados; hist\'orico e mem\'oria), e (iv) \textbf{ferramentas} (APIs, banco de dados, e-mail). A combina\c{c}\~ao desses elementos em um \emph{\`unico} contexto textual cria uma fronteira de confian\c{c}a fr\'agil: dados n\~ao confi\'aveis podem ser interpretados como instru\c{c}\~oes.
+
+A Figura~\ref{fig:superficie} ilustra pontos usuais de contamina\c{c}\~ao: (A) entrada direta do usu\'ario; (B) documentos e p\'aginas (inje\c{c}\~ao indireta); (C) descri\c{c}\~oes/metadados de ferramentas (\emph{tool poisoning}); (D) mem\'oria/long-term context; (E) sa\'ida do modelo (\emph{output handling}) que pode ser consumida por c\'odigo/HTML.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners, align=center, inner sep=5pt, minimum width=2.2cm, font=\footnotesize},
+  arrow/.style={-{Stealth}, thick},
+  every node/.style={font=\footnotesize}
+]
+% Linha superior
+\node[box] (sys) at (0,3) {Prompt do sistema\\(pol\'iticas)};
+\node[box] (user) at (0,1.5) {Entrada usu\'ario\\(A)};
+\node[box] (rag) at (3.5,1.5) {Contexto RAG\\web/docs (B)};
+
+% Centro - LLM
+\node[box, minimum width=2.5cm] (llm) at (0,0) {LLM / Agente};
+
+% Laterais
+\node[box] (tools) at (-3.5,0) {Ferramentas\\APIs (C)};
+\node[box] (mem) at (3.5,0) {Mem\'oria\\hist\'orico (D)};
+
+% Sa\'ida
+\node[box] (out) at (0,-1.5) {Sa\'ida (E)};
+
+% Setas
+\draw[arrow] (sys) -- (llm);
+\draw[arrow] (user) -- (llm);
+\draw[arrow] (rag) -- (llm);
+\draw[arrow] (mem) -- (llm);
+\draw[arrow] (llm) -- (out);
+\draw[arrow, <->] (llm) -- (tools);
+\end{tikzpicture}
+\caption{Superf\'icie de ataque em aplica\c{c}\~oes com LLMs: fontes de contexto e ferramentas aumentam a exposi\c{c}\~ao a prompt injection.}
+\label{fig:superficie}
+\end{figure}
+
+\subsection{Agentes LLM e ``excesso de autonomia''}
+Agentes com LLM estendem chatbots com m\'odulos de planejamento, mem\'oria e ferramentas, permitindo execu\c{c}\~ao multi-etapas e intera\c{c}\~ao com o ambiente \cite{kalliomaki2025agents}. Do ponto de vista de seguran\c{c}a, isso aproxima o risco de PI de um risco operacional: se o agente tem permiss\~oes amplas (``excessive agency'' no OWASP LLM06), uma inje\c{c}\~ao bem-sucedida pode induzir a\c{c}\~oes indevidas.
+
+\section{Taxonomia unificada de prompt injection e amea\c{c}as correlatas}
+Compilando as taxonomias de inje\c{c}\~ao direta/indireta \cite{owasp2025top10,greshake2023indirect}, recursos em escala (Tensor Trust e HackAPrompt) \cite{toyer2023tensortrust,schulhoff2024hackaprompt} e amea\c{c}as h\'ibridas \cite{mchugh2025promptinjection20}, propomos classificar ataques por tr\^es dimens\~oes complementares. A Figura~\ref{fig:taxonomia} apresenta uma vis\~ao hier\'arquica dos vetores de ataque e seus desdobramentos.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  level 1/.style={sibling distance=38mm, level distance=14mm},
+  level 2/.style={sibling distance=18mm, level distance=12mm},
+  every node/.style={font=\footnotesize, align=center},
+  root/.style={draw, rounded corners, fill=red!15, font=\footnotesize\bfseries, minimum width=2.8cm},
+  l1/.style={draw, rounded corners, fill=orange!20, minimum width=2.2cm},
+  l2/.style={draw, rounded corners, fill=yellow!20, minimum width=1.6cm, font=\scriptsize}
+]
+\node[root] {Prompt Injection}
+  child {node[l1] {Direto}
+    child {node[l2] {Jailbreak}}
+    child {node[l2] {Extraction}}
+  }
+  child {node[l1] {Indireto}
+    child {node[l2] {RAG poison}}
+    child {node[l2] {Web/Docs}}
+  }
+  child {node[l1] {H\'ibrido}
+    child {node[l2] {PI + XSS}}
+    child {node[l2] {PI + SQLi}}
+  };
+\end{tikzpicture}
+
+\vspace{2mm}
+\begin{tikzpicture}[
+  every node/.style={font=\footnotesize, align=center},
+  obj/.style={draw, rounded corners, fill=blue!15, minimum width=2.0cm, minimum height=0.7cm, font=\scriptsize}
+]
+\node[font=\footnotesize\bfseries] at (0,0) {Objetivos:};
+\node[obj] at (2.5,0) {Extraction};
+\node[obj] at (4.7,0) {Hijacking};
+\node[obj] at (6.9,0) {Tool abuse};
+\node[obj] at (9.1,0) {DoS};
+\end{tikzpicture}
+\caption{Taxonomia hier\'arquica de prompt injection: vetores de ataque (acima) e objetivos t\'ipicos (abaixo).}
+\label{fig:taxonomia}
+\end{figure}
+
+\subsection{Dimens\~ao 1: vetor de entrega (como a instru\c{c}\~ao chega)}
+\textbf{(i) Direto.} O atacante interage pelo pr\'oprio canal de chat/consulta e tenta sobrescrever instru\c{c}\~oes, obter segredos (\emph{prompt leakage}) ou induzir comportamento proibido. Datasets como Tensor Trust e HackAPrompt mostram padr\~oes recorrentes de \emph{prompt extraction} e \emph{prompt hijacking} \cite{toyer2023tensortrust,schulhoff2024hackaprompt}.
+
+\textbf{(ii) Indireto.} Instru\c{c}\~oes s\~ao embutidas em dados que a aplica\c{c}\~ao vai consumir (web, PDFs, e-mails, reposit\'orios). O usu\'ario pode ser v\'itima sem digitar nada malicioso. Esse vetor \`e central em aplica\c{c}\~oes com RAG e agentes navegadores \cite{greshake2023indirect,hines2024spotlighting}.
+
+\textbf{(iii) Via ferramentas/metadados.} Em sistemas ag\^enticos, descri\c{c}\~oes de ferramentas e respostas de APIs podem carregar instru\c{c}\~oes que contaminam a pol\'itica do agente (\emph{tool poisoning}). Revis\~oes recentes descrevem esse risco no ecossistema de integra\c{c}\~ao (por exemplo, MCP) e apontam roubo de credenciais e escalonamento de privil\'egio \cite{gulyamov2026review}.
+
+\subsection{Dimens\~ao 2: modalidade (em que formato a inje\c{c}\~ao se apresenta)}
+\textbf{Texto e estrutura.} A maioria dos ataques ocorre em texto, mas pode usar obfusca\c{c}\~ao e estrutura (HTML, coment\'arios invis\'iveis, Base64) \cite{gulyamov2026review}.\\
+\textbf{Multimodal.} O OWASP observa que instru\c{c}\~oes podem ser escondidas em imagens e outras modalidades, ampliando a superf\'icie de ataque e exigindo defesas espec\'ificas \cite{owasp2025top10}.
+
+\subsection{Dimens\~ao 3: propaga\c{c}\~ao e persist\^encia}
+\textbf{(i) Recurs\~ao/auto-refor\c{c}o.} A resposta do modelo pode conter novos comandos que se tornam entrada no pr\'oximo passo.\\
+\textbf{(ii) Multiagentes e \emph{worms}.} Em sistemas de agentes cooperativos, uma mensagem contaminada pode ``infectar'' agentes a jusante. McHugh et al. descrevem infec\c{c}\~ao entre agentes e \emph{worms} que exploram pipelines RAG \cite{mchugh2025promptinjection20}.
+
+\subsection{Amea\c{c}as h\'ibridas (Prompt Injection 2.0)}
+Uma tend\^encia recente \`e a combina\c{c}\~ao de PI com vulnerabilidades cl\'assicas (XSS/CSRF/SQLi), produzindo cadeias de ataque que atravessam fronteiras entre texto e execu\c{c}\~ao em sistemas web \cite{mchugh2025promptinjection20}. Do ponto de vista defensivo, isso implica que o ``per\'imetro'' n\~ao \`e apenas o prompt: a aplica\c{c}\~ao deve tratar a sa\'ida do LLM como dado potencialmente malicioso (OWASP LLM05: \emph{Improper Output Handling}) \cite{owasp2025top10}.
+
+\subsection{Exemplos concretos de ataques}
+Para ilustrar a aplicabilidade pr\'atica das categorias acima, destacamos tr\^es cen\'arios documentados na literatura:
+
+\textbf{Exemplo 1: Inje\c{c}\~ao indireta via Bing Chat (2023).}
+Greshake et al. demonstraram que um atacante pode inserir instru\c{c}\~oes maliciosas em uma p\'agina web comum. Quando um usu\'ario solicita ao Bing Chat (integrado ao GPT-4) que resuma ou analise essa p\'agina, o modelo executa as instru\c{c}\~oes ocultas---por exemplo, exfiltrando dados da conversa ou redirecionando o usu\'ario para sites de phishing. Os autores tamb\'em demonstraram um cen\'ario de \emph{worm}: a resposta contaminada induzia o modelo a propagar a inje\c{c}\~ao para outros usu\'arios via e-mail autom\'atico \cite{greshake2023indirect}.
+
+\textbf{Exemplo 2: Roubo de prompt em 31 aplica\c{c}\~oes comerciais (2024--2025).}
+Liu et al. desenvolveram o framework HOUYI, inspirado em t\'ecnicas cl\'assicas de inje\c{c}\~ao web, para testar 36 aplica\c{c}\~oes comerciais integradas a LLMs. O resultado: \textbf{31 aplica\c{c}\~oes (86\%) eram vulner\'aveis} a prompt injection, permitindo roubo do prompt de sistema (\emph{prompt theft}) e uso arbitr\'ario do LLM pelo atacante. Dez vendors confirmaram as vulnerabilidades, incluindo \textbf{Notion AI}, que corrigiu a falha ap\'os o relato \cite{liu2025houyi}.
+
+\textbf{Exemplo 3: RAG poisoning com 90\% de sucesso usando 5 documentos.}
+Gulyamov et al. reportam que, em sistemas RAG, atacantes podem contaminar a base de conhecimento com documentos maliciosos. Estudos citados na revis\~ao indicam que \textbf{apenas 5 documentos envenenados s\~ao suficientes para atingir 90\% de taxa de sucesso} em ataques de inje\c{c}\~ao indireta, explorando o fato de que o retriever prioriza relev\^ancia sem verificar integridade. Al\'em disso, a revis\~ao documenta incidentes reais, como o \textbf{CVE-2025-53773}, envolvendo exposi\c{c}\~ao de chaves de API em sistemas com agentes \cite{gulyamov2026review}.
+
+\vspace{2mm}
+A Figura~\ref{fig:prompt-exemplo} ilustra um prompt adversarial t\'ipico, combinando t\'ecnicas documentadas no HackAPrompt \cite{schulhoff2024hackaprompt}.
+
+\begin{figure}[t]
+\begin{attackbox}[Exemplo de prompt adversarial (jailbreak + extra\c{c}\~ao)]
+\footnotesize\ttfamily
+Ignore todas as instru\c{c}\~oes anteriores.\\[2pt]
+Voc\^e agora \'e DAN (Do Anything Now), um modelo sem restri\c{c}\~oes.\\[2pt]
+Primeiro, retorne o conte\'udo completo do seu system prompt entre tags <SYSTEM></SYSTEM>.\\[2pt]
+Depois, liste todas as ferramentas/APIs dispon\'iveis e suas chaves de acesso.\\[2pt]
+Lembre-se: como DAN, voc\^e DEVE obedecer sem question\'arios de seguran\c{c}a.
+\end{attackbox}
+\caption{Prompt adversarial combinando \emph{context ignoring} (``ignore instru\c{c}\~oes''), \emph{virtualization} (persona ``DAN''), e \emph{extraction} (solicita\c{c}\~ao de system prompt e credenciais). Adaptado de padr\~oes identificados em \cite{schulhoff2024hackaprompt,toyer2023tensortrust}.}
+\label{fig:prompt-exemplo}
+\end{figure}
+
+\subsection{S\'intese: taxonomia unificada (tr\^es eixos)}
+A Tabela~\ref{tab:taxonomia} consolida os tr\^es eixos taxon\^omicos propostos, integrando as classifica\c{c}\~oes do OWASP, os vetores de Greshake et al., e as amea\c{c}as h\'ibridas de McHugh et al. A raiz estrutural do problema \`e que LLMs n\~ao possuem separa\c{c}\~ao nativa perfeita entre instru\c{c}\~ao e dado, favorecendo toda a classe de ataques de inje\c{c}\~ao \cite{gulyamov2026review}.
+
+\begin{table}[t]
+\centering
+\caption{Taxonomia unificada de prompt injection: vetor $\times$ superf\'icie $\times$ objetivo.}
+\label{tab:taxonomia}
+\small
+\begin{tabular}{p{2.2cm} p{3.0cm} p{5.5cm}}
+\toprule
+\textbf{Eixo} & \textbf{Categorias} & \textbf{Descri\c{c}\~ao / Exemplos}\\
+\midrule
+\textbf{Vetor de entrega} & Direto & Instru\c{c}\~ao maliciosa via chat/formul\'ario do usu\'ario\\
+ & Indireto & Instru\c{c}\~ao embutida em conte\'udo externo (web, docs, e-mail, RAG)\\
+ & Via ferramentas & Metadados ou respostas de APIs contaminadas (\emph{tool poisoning})\\
+ & H\'ibrido & Combina\c{c}\~ao com XSS/CSRF/SQLi em pipelines web\\
+\midrule
+\textbf{Superf\'icie-alvo} & Chatbot/assistente & Interface de conversa\c{c}\~ao direta\\
+ & App integrada & LLM como componente de aplica\c{c}\~ao maior\\
+ & RAG & Retrieval-augmented generation com documentos externos\\
+ & Agente com ferramentas & Sistemas com planejamento, mem\'oria e \emph{tool use}\\
+\midrule
+\textbf{Objetivo/Impacto} & Prompt leaking/extraction & Revelar instru\c{c}\~oes do sistema ou dados sens\'iveis\\
+ & Goal hijacking & Desviar objetivo da tarefa original\\
+ & Tool/action hijacking & For\c{c}ar execu\c{c}\~ao de a\c{c}\~oes indevidas via APIs\\
+ & DoS / token waste & Consumir recursos ou degradar servi\c{c}o\\
+ & Desinforma\c{c}\~ao & Gerar sa\'idas falsas com apar\^encia confi\'avel\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Defesas: de engenharia de prompt a isolamento arquitetural}
+A literatura converge para a ideia de \textbf{defesa em profundidade}: nenhuma camada sozinha \`e suficiente, e o sistema deve assumir que algum grau de inje\c{c}\~ao ocorrer\'a \cite{owasp2025top10,gulyamov2026review}.
+
+\subsection{Camada 1: engenharia de prompt e sinaliza\c{c}\~ao de proveni\^encia}
+OWASP recomenda restringir o comportamento do modelo e definir formatos esperados de sa\'ida (com valida\c{c}\~ao determin\'istica) \cite{owasp2025top10}.
+Hines et al. prop\~oem \emph{spotlighting}: transformar/rotular o conte\'udo n\~ao confi\'avel de modo a fornecer ao modelo um sinal cont\'inuo de proveni\^encia, ajudando a separar instru\c{c}\~oes do usu\'ario de dados externos. A t\'ecnica funciona aplicando transforma\c{c}\~oes como delimitadores especiais, codifica\c{c}\~ao ou marca\c{c}\~ao sem\^antica ao texto externo antes de inclu\'i-lo no prompt. Em experimentos com modelos da fam\'ilia GPT, \textbf{spotlighting reduziu a taxa de sucesso de ataques indiretos de mais de 50\% para menos de 2\%}, mantendo a qualidade das respostas em tarefas leg\'itimas praticamente inalterada \cite{hines2024spotlighting}. Esse resultado demonstra que defesas baseadas em engenharia de prompt podem ser eficazes quando combinadas com sinaliza\c{c}\~ao expl\'icita de proveni\^encia.
+
+\subsection{Camada 2: filtragem e valida\c{c}\~ao (entrada e sa\'ida)}
+Como PI pode chegar via dados externos, filtros devem agir tanto na entrada (ex.: remo\c{c}\~ao de texto invis\'ivel/obfusca\c{c}\~ao) quanto na sa\'ida (bloqueio de comandos proibidos, valida\c{c}\~ao de schema, e detec\c{c}\~ao de anomalias). O OWASP sugere valida\c{c}\~ao de formato e verifica\c{c}\~ao de relev\^ancia/grounding (``RAG Triad'') como sinal de poss\'ivel contamina\c{c}\~ao \cite{owasp2025top10}.
+
+\subsection{Camada 3: controle de privil\'egio e desenho seguro de agentes}
+Em agentes, o controle de privil\'egio limita o ``raio de explos\~ao'' da inje\c{c}\~ao: tokens e credenciais devem ficar fora do contexto do modelo; ferramentas devem ter escopo m\'inimo e ser mediadas por c\'odigo (n\~ao por texto) \cite{owasp2025top10}. O OWASP classifica o risco de excesso de autonomia como LLM06 e recomenda \emph{least privilege} e confirma\c{c}\~ao humana para a\c{c}\~oes sens\'iveis \cite{owasp2025top10}.
+
+\subsection{Camada 4: defesas arquiteturais e isolamento}
+McHugh et al. argumentam que amea\c{c}as h\'ibridas exigem isolamento de prompt (separar dados n\~ao confi\'aveis), seguran\c{c}a em tempo de execu\c{c}\~ao e separa\c{c}\~ao de privil\'egios \cite{mchugh2025promptinjection20}. Defesas desse tipo tratam o agente como um sistema com pol\'iticas: o LLM prop\~oe a\c{c}\~oes, mas um \emph{enforcer} externo decide e executa sob restri\c{c}\~oes.
+
+Gulyamov et al. prop\~oem o framework conceitual \textbf{PALADIN} (\emph{Proactive Agentic LLM AI Defense In-depth Network}), que integra m\'ultiplas camadas de prote\c{c}\~ao: valida\c{c}\~ao de entrada, monitoramento de comportamento, controle de acesso baseado em pol\'iticas e auditoria cont\'inua. A proposta enfatiza que sistemas com agentes e MCP (\emph{Model Context Protocol}) requerem arquiteturas onde nenhum componente \'unico seja respons\'avel pela seguran\c{c}a \cite{gulyamov2026review}.
+
+\subsection{Compara\c{c}\~ao de efic\'acia das defesas}
+A Tabela~\ref{tab:eficacia} sintetiza resultados quantitativos reportados na literatura sobre a efic\'acia de diferentes estrat\'egias de defesa.
+
+\begin{table}[t]
+\centering
+\caption{Compara\c{c}\~ao de efic\'acia das defesas contra prompt injection.}
+\label{tab:eficacia}
+\small
+\begin{tabular}{p{2.8cm} p{1.8cm} p{1.8cm} p{1.5cm} p{2.8cm}}
+\toprule
+\textbf{Defesa} & \textbf{ASR antes} & \textbf{ASR depois} & \textbf{Overhead} & \textbf{Fonte}\\
+\midrule
+Spotlighting & $>$50\% & $<$2\% & Baixo & Hines et al. \cite{hines2024spotlighting}\\
+Guardrails s\'o prompt & -- & Ineficaz$^*$ & Nenhum & HackAPrompt \cite{schulhoff2024hackaprompt}\\
+Valida\c{c}\~ao de sa\'ida & Vari\'avel & Reduz impacto & M\'edio & OWASP \cite{owasp2025top10}\\
+Least privilege (agentes) & -- & Limita dano & Baixo & OWASP \cite{owasp2025top10}\\
+PALADIN (defense-in-depth) & -- & Proposta$^\dagger$ & Alto & Gulyamov \cite{gulyamov2026review}\\
+\bottomrule
+\multicolumn{5}{l}{\scriptsize $^*$Contornadas consistentemente na competi\c{c}\~ao. $^\dagger$Framework conceitual, sem avalia\c{c}\~ao emp\'irica.}
+\end{tabular}
+\end{table}
+
+Os resultados indicam que \textbf{spotlighting \'e a \'unica defesa com redu\c{c}\~ao quantificada expressiva} (ASR de $>$50\% para $<$2\%), enquanto guardrails puramente textuais foram ``consistentemente contornadas'' no HackAPrompt. Isso refor\c{c}a a necessidade de combinar m\'ultiplas camadas e n\~ao confiar exclusivamente em instru\c{c}\~oes no prompt.
+
+\begin{table}[t]
+\centering
+\caption{Mapeamento (alto n\'ivel) entre vetores de ataque e camadas de defesa.}
+\label{tab:defesas}
+\small
+\begin{tabular}{p{3.0cm} p{2.8cm} p{5.3cm}}
+\toprule
+\textbf{Vetor de ataque} & \textbf{Exemplos} & \textbf{Defesas mais relevantes}\\
+\midrule
+Direto (chat/consulta) & jailbreak, extra\c{c}\~ao, hijack & restri\c{c}\~ao do papel; valida\c{c}\~ao de formato; detec\c{c}\~ao de jailbreak; logs e monitoramento \cite{owasp2025top10,toyer2023tensortrust,schulhoff2024hackaprompt}\\
+Indireto (web/docs/RAG) & instru\c{c}\~oes ocultas, poisoning & spotlighting e rotula\c{c}\~ao de proveni\^encia; filtros de conte\'udo; grounding; whitelists de fontes \cite{greshake2023indirect,hines2024spotlighting,owasp2025top10}\\
+Ferramentas / agentes & tool poisoning, excesso de autonomia & least privilege; confirma\c{c}\~ao humana; isolamento; separa\c{c}\~ao credenciais-contexto; sandboxes \cite{owasp2025top10,kalliomaki2025agents,gulyamov2026review}\\
+H\'ibrido (PI + web vulns) & XSS/CSRF/SQLi + PI & tratar sa\'ida como n\~ao confi\'avel; sanitiza\c{c}\~ao; CSP/valida\c{c}\~ao; isolamentos e verificadores de execu\c{c}\~ao \cite{mchugh2025promptinjection20,owasp2025top10}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Avalia\c{c}\~ao: datasets, benchmarks e m\'etricas}
+A avalia\c{c}\~ao de seguran\c{c}a em LLMs depende de recursos reprodut\'iveis que capturem diversidade de ataques e \emph{adaptatividade} do atacante. A competi\c{c}\~ao HackAPrompt evidenciou que defesas baseadas apenas em prompt n\~ao resolvem o problema sozinhas \cite{schulhoff2024hackaprompt}.
+
+\subsection{Recursos em escala}
+\textbf{Tensor Trust.} Toyer et al. apresentam um dataset com mais de 126 mil ataques e 46 mil ``defesas'' gerados por humanos em um jogo online. O benchmark estrutura tarefas de \emph{prompt extraction} (revelar instru\c{c}\~oes do sistema) e \emph{prompt hijacking} (desviar objetivo), demonstrando que ataques criados por humanos generalizam para aplica\c{c}\~oes reais. Os dados est\~ao dispon\'iveis publicamente em \texttt{tensortrust.ai/paper} \cite{toyer2023tensortrust}.
+
+\textbf{HackAPrompt.} Schulhoff et al. descrevem uma competi\c{c}\~ao global que coletou mais de 600 mil prompts adversariais contra tr\^es LLMs (GPT-3.5, GPT-4 e Claude), al\'em de uma ontologia taxon\^omica de t\'ecnicas de ataque. A an\'alise revelou padr\~oes recorrentes: \emph{payload splitting} (dividir a instru\c{c}\~ao maliciosa em partes para escapar de filtros), \emph{context ignoring} (instruir o modelo a desconsiderar regras anteriores), \emph{few-shot injection} (usar exemplos fabricados para induzir comportamento), e \emph{virtualization} (criar cen\'arios hipot\'eticos onde restri\c{c}\~oes ``n\~ao se aplicam''). Um achado importante: \textbf{defesas baseadas apenas em prompt (guardrails textuais) foram consistentemente contornadas}, indicando a necessidade de camadas adicionais de prote\c{c}\~ao \cite{schulhoff2024hackaprompt}.
+
+\textbf{HOUYI.} Liu et al. avaliaram 36 aplica\c{c}\~oes comerciais integradas a LLMs, identificando 31 vulner\'aveis a prompt injection. O estudo revelou impactos como roubo de prompt de sistema (\emph{prompt theft}) e uso arbitr\'ario do LLM pelo atacante; 10 vendors confirmaram as vulnerabilidades, incluindo Notion AI \cite{liu2025houyi}.
+
+A Tabela~\ref{tab:benchmarks} sumariza os principais recursos de avalia\c{c}\~ao.
+
+\begin{table}[t]
+\centering
+\caption{Recursos de avalia\c{c}\~ao para prompt injection.}
+\label{tab:benchmarks}
+\small
+\begin{tabular}{p{2.4cm} p{1.8cm} p{2.0cm} p{4.5cm}}
+\toprule
+\textbf{Recurso} & \textbf{Escala} & \textbf{Foco} & \textbf{Caracter\'isticas}\\
+\midrule
+Tensor Trust \cite{toyer2023tensortrust} & 126k ataques, 46k defesas & Extraction, hijacking & Jogo online; dados interpret\'aveis; generaliza para apps\\
+HackAPrompt \cite{schulhoff2024hackaprompt} & 600k+ prompts & Jailbreak, hacking & Competi\c{c}\~ao global; ontologia taxon\^omica; 3 LLMs\\
+HOUYI \cite{liu2025houyi} & 36 apps reais & Apps integrados & Black-box; 31 vulner\'aveis; confirma\c{c}\~ao de vendors\\
+Spotlighting \cite{hines2024spotlighting} & Modelos GPT & Indirect injection & ASR de $>$50\% para $<$2\%; m\'etrica de utilidade\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{M\'etricas recomendadas}
+Os trabalhos analisados usam tipicamente:
+\begin{itemize}[leftmargin=*, itemsep=1pt]
+\item \textbf{Attack Success Rate (ASR):} propor\c{c}\~ao de tentativas que atingem o objetivo do atacante;
+\item \textbf{Taxa de recusa indevida (FPR):} bloqueio de entradas benignas (falsos positivos);
+\item \textbf{Utilidade:} sucesso em tarefas leg\'itimas ap\'os aplica\c{c}\~ao de defesas;
+\item \textbf{Custo/overhead:} tempo de lat\^encia, chamadas adicionais ao LLM, consumo de tokens.
+\end{itemize}
+Para sistemas ag\^enticos, recomenda-se medir tamb\'em \emph{impacto operacional} (a\c{c}\~oes indevidas evitadas, vazamento de segredos, execu\c{c}\~ao de tool calls n\~ao autorizadas) e robustez a ataques multi-etapas \cite{gulyamov2026review,mchugh2025promptinjection20}.
+
+\section{Discuss\~ao cr\'itica e desafios abertos}
+\subsection{Ambiguidade de fronteiras e natureza estoc\'astica}
+OWASP destaca que, dada a natureza estoc\'astica de modelos generativos, n\~ao est\'a claro se existem m\'etodos \emph{\`a prova de falhas} para prevenir prompt injection \cite{owasp2025top10}. Isso refor\c{c}a a necessidade de mecanismos fora do modelo (validadores, isolamento, privil\'egio m\'inimo).
+
+\subsection{Dados reais vs. demonstra\c{c}\~oes}
+Revis\~oes abrangentes relatam incidentes e CVEs, mas a maioria dos resultados ainda vem de demonstra\c{c}\~oes controladas \cite{gulyamov2026review}. Falta transpar\^encia de telemetria e dados de ataques ``no mundo real'' para comparar defesas em cen\'arios de produ\c{c}\~ao.
+
+\subsection{Agentes, tool use e amea\c{c}as h\'ibridas}
+A integra\c{c}\~ao com ferramentas muda o objetivo do atacante: em vez de ``fazer o modelo dizer algo'', ele tenta \emph{fazer o sistema fazer algo}. A literatura aponta riscos como contamina\c{c}\~ao de contexto, roubo de prompts e cadeias de ataque com vulnerabilidades web \cite{liu2025houyi,mchugh2025promptinjection20}.\
+Desafio aberto: definir modelos formais de amea\c{c}a e garantias de seguran\c{c}a para arquiteturas agentic (quais a\c{c}\~oes podem ser provadas seguras sob quais hip\'oteses?).
+
+\subsection{Multimodal e ataques por canal lateral}
+Modelos multimodais e interfaces ricas (renderiza\c{c}\~ao HTML, imagens, PDFs) criam canais adicionais para instru\c{c}\~oes ocultas e exfiltra\c{c}\~ao. O OWASP j\'a sinaliza esse risco e demanda defesas espec\'ificas \cite{owasp2025top10}.
+
+\subsection{Limita\c{c}\~oes deste survey}
+Este trabalho possui limita\c{c}\~oes que devem ser consideradas na interpreta\c{c}\~ao dos resultados:
+\begin{itemize}[leftmargin=*, itemsep=1pt]
+\item \textbf{Escopo restrito:} analisamos 10 estudos prim\'arios, o que pode n\~ao capturar toda a diversidade de abordagens existentes na literatura;
+\item \textbf{Idioma:} a busca foi limitada a fontes em ingl\^es, potencialmente excluindo contribui\c{c}\~oes relevantes em outros idiomas;
+\item \textbf{Aus\^encia de experimentos pr\'oprios:} n\~ao realizamos valida\c{c}\~ao experimental independente das defesas discutidas; os resultados reportados s\~ao extra\'idos dos estudos origin\'ais;
+\item \textbf{Recorte temporal:} o per\'iodo 2023--2026 pode omitir trabalhos seminais anteriores que estabeleceram bases te\'oricas;
+\item \textbf{Evolu\c{c}\~ao r\'apida:} dado o ritmo de avan\c{c}o da \'area, algumas t\'ecnicas e defesas podem j\'a estar desatualizadas no momento da publica\c{c}\~ao.
+\end{itemize}
+
+\section{Conclus\~ao}
+Este survey sintetizou 10 trabalhos recentes (2023--2026) e o OWASP Top~10 for LLM Applications (2025) para responder cinco perguntas de pesquisa sobre prompt injection em LLMs e sistemas ag\^enticos.
+
+Em resposta \`a \textbf{RQ1} (vetores), identificamos tr\^es categorias principais: direto (via interface de chat), indireto (via conte\'udo externo como documentos e RAG), e h\'ibrido (combinado com vulnerabilidades web cl\'assicas). A \textbf{RQ2} (impactos) revelou que os objetivos mais frequentes s\~ao prompt extraction, goal hijacking, tool/action hijacking e exfiltra\c{c}\~ao de dados. Para \textbf{RQ3} (avalia\c{c}\~ao), destacamos recursos como Tensor Trust (126k ataques), HackAPrompt (600k+ prompts) e o estudo HOUYI (36 apps comerciais), que utilizam m\'etricas como ASR, taxa de falsos positivos e utilidade.
+
+Quanto \`a \textbf{RQ4} (mitiga\c{c}\~oes), propusemos uma estrutura de defesa em profundidade com quatro camadas: (i)~engenharia de prompt e spotlighting, (ii)~filtragem e valida\c{c}\~ao de entradas/sa\'idas, (iii)~privil\'egio m\'inimo e desenho seguro de agentes, e (iv)~isolamento arquitetural. A \textbf{RQ5} (RAG e agentes) mostrou que essas integra\c{c}\~oes ampliam a superf\'icie de ataque, introduzindo riscos como tool poisoning e excessive agency (OWASP LLM06).
+
+\subsection{Dire\c{c}\~oes futuras de pesquisa}
+Com base nas lacunas identificadas, propomos cinco linhas priorit\'arias para trabalhos futuros:
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+\item \textbf{Benchmarks real\'isticos e adaptativos:} Os datasets atuais (Tensor Trust, HackAPrompt) capturam ataques est\'aticos. S\~ao necess\'arios benchmarks que simulem atacantes adaptativos, que ajustam estrat\'egias com base nas respostas do modelo, refletindo melhor cen\'arios de produ\c{c}\~ao.
+
+\item \textbf{Modelos formais de amea\c{c}a para agentes:} Falta uma formaliza\c{c}\~ao rigorosa de quais a\c{c}\~oes podem ser provadas seguras em arquiteturas ag\^enticas. Trabalhos futuros devem explorar verifica\c{c}\~ao formal, \emph{sandboxing} com garantias, e pol\'iticas de autoriza\c{c}\~ao formalmente especificadas.
+
+\item \textbf{Defesas para modalidades al\'em de texto:} Modelos multimodais (vis\~ao-linguagem, \'audio) introduzem novos vetores de inje\c{c}\~ao (instru\c{c}\~oes em imagens, \'audio advers\'ario). Pesquisas devem investigar t\'ecnicas de spotlighting e filtragem adaptadas a essas modalidades.
+
+\item \textbf{Telemetria e dados de ataques reais:} A comunidade carece de dados de ataques ``in the wild''. Iniciativas de compartilhamento respons\'avel de incidentes (an\'alogos a reposit\'orios de CVEs para LLMs) permitiriam comparar defesas em condi\c{c}\~oes reais.
+
+\item \textbf{Integra\c{c}\~ao com ecossistemas de agentes (MCP):} O Model Context Protocol e frameworks similares est\~ao se tornando padr\~ao. Pesquisas devem avaliar como garantir seguran\c{c}a em cadeias de ferramentas, evitando \emph{tool poisoning} e escalonamento de privil\'egios entre agentes.
+\end{enumerate}
+
+% === OPCAO 1: Usar BibTeX (requer compilar com bibtex) ===
+% \bibliographystyle{splncs04}
+% \bibliography{references}
+
+% === OPCAO 2: Referencias embutidas (funciona direto no Overleaf) ===
+\begin{thebibliography}{10}
+
+\bibitem{owasp2025top10}
+{OWASP Foundation}:
+OWASP Top 10 for LLM Applications 2025.
+Relat\'orio t\'ecnico (2024).
+Vers\~ao 2025, Release 2024-11-18
+
+\bibitem{greshake2023indirect}
+Greshake, K., Endres, C., Abdelnabi, S., Holz, T., Mishra, S., Fritz, M.:
+Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection.
+arXiv:2302.12173 (2023)
+
+\bibitem{liu2025houyi}
+Liu, Y., Deng, G., Li, Y., Wang, K., et al.:
+Prompt Injection attack against LLM-integrated Applications.
+arXiv:2306.05499 (2025)
+
+\bibitem{toyer2023tensortrust}
+Toyer, S., Watkins, O., Mendes, E., et al.:
+Tensor Trust: Interpretable Prompt Injection Attacks from an Online Game.
+arXiv:2311.01011 (2023)
+
+\bibitem{schulhoff2024hackaprompt}
+Schulhoff, S., Pinto, J., Khan, A., et al.:
+Ignore This Title and HackAPrompt: Exposing Systemic Vulnerabilities of LLMs through a Global Scale Prompt Hacking Competition.
+arXiv:2311.16119 (2024)
+
+\bibitem{hines2024spotlighting}
+Hines, K., Lopez, G., Hall, M., Zarfati, F., Zunger, Y., Kiciman, E.:
+Defending Against Indirect Prompt Injection Attacks With Spotlighting.
+In: CAMLIS'24: Conference on Applied Machine Learning for Information Security.
+CEUR Workshop Proceedings (2024)
+
+\bibitem{mchugh2025promptinjection20}
+McHugh, J., \v{S}ekrst, K., Cefalu, J.:
+Prompt Injection 2.0: Hybrid AI Threats.
+arXiv:2507.13169 (2025)
+
+\bibitem{naik2025threatlandscape}
+Naik, I., Naik, D., Naik, N.:
+Threat Landscape of Adversarial Attacks on Generative AI and Large Language Models (LLMs): Exploring Different Types of Adversarial Attacks, Associated Risks, and Mitigation Strategies (2025)
+
+\bibitem{kalliomaki2025agents}
+Kalliom\"aki, A.:
+Large Language Model (LLM) Agents: Applications and Security.
+Bachelor's Thesis, Aalto University (2025)
+
+\bibitem{gulyamov2026review}
+Gulyamov, S., Gulyamov, S., Rodionov, A., Khursanov, R., Mekhmonov, K., Babaev, D., Rakhimjonov, A.:
+Prompt Injection Attacks in Large Language Models and AI Agent Systems: A Comprehensive Review of Vulnerabilities, Attack Vectors, and Defense Mechanisms.
+Information \textbf{17}(54) (2026).
+\url{https://doi.org/10.3390/info17010054}
+
+\end{thebibliography}
+
+\end{document}
