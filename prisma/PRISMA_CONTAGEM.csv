@@ -1,0 +1,12 @@
+Etapa,Variável,Valor,Fórmula/Origem
+IDENTIFICAÇÃO,A - Records de bases de dados,,Soma de todas as bases
+IDENTIFICAÇÃO,B - Records de outros métodos (snowballing),,Se aplicável
+REMOÇÃO PRÉ-TRIAGEM,C - Duplicatas removidas,,Zotero: Find Duplicates
+REMOÇÃO PRÉ-TRIAGEM,D - Removidos por outros motivos,,Ex: fora do período automaticamente
+TRIAGEM,E - Records triados,,"A + B - C - D"
+TRIAGEM,F - Excluídos (título/resumo),,Planilha TRIAGEM
+ELEGIBILIDADE,G - Reports buscados para leitura,,"E - F"
+ELEGIBILIDADE,H - Reports não obtidos,,PDFs não acessíveis
+ELEGIBILIDADE,I - Reports avaliados (texto completo),,"G - H"
+ELEGIBILIDADE,J - Reports excluídos (com motivos),,Planilha TRIAGEM (coluna TC)
+INCLUSÃO,K - Estudos incluídos,10,"I - J (deve dar 10)"

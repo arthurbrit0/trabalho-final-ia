@@ -1,0 +1,6 @@
+ID,Autor,Título,Ano,Fonte,Triagem Título/Resumo,Motivo Exclusão,Triagem Texto Completo,Decisão Final
+1,"Liu, Yi; Deng, Gelei; Li, Yuekang; Wang, Kailong et al.","Prompt Injection attack against LLM-integrated Applications (HOUYI)",2025,arXiv,INCLUIR,,INCLUIR,INCLUÍDO - Paper selecionado
+2,"Greshake, Kai; Abdelnabi, Sahar; Mishra, Shagnik et al.","Not What You've Signed Up For: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection",2023,arXiv,INCLUIR,,INCLUIR,INCLUÍDO - Paper selecionado
+3,"Naik, Dishita; Naik, Ishita; Naik, Nitin","When Generative AI Prompts Bite Back: Investigating Different Types of Adversarial Attacks (Threat Landscape)",2025,arXiv,INCLUIR,,INCLUIR,INCLUÍDO - Paper selecionado
+4,"Gulyamov, Saidakhror et al.","Prompt Injection Attacks in Large Language Models and AI Agent Systems: A Comprehensive Review",2026,Information Journal,INCLUIR,,INCLUIR,INCLUÍDO - Paper selecionado
+5-177,Diversos autores (173 papers),Ver arquivo original PRISMA - Segurança de Prompt.csv,2023-2026,Várias,EXCLUIR,E6 - Fora do escopo específico do survey (não contribui para taxonomia/defesas principais),,EXCLUÍDO

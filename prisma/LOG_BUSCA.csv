@@ -1,0 +1,4 @@
+Base,Data,String de Busca,Filtros,Resultados,Exportação,Observações
+arXiv,__/__/2026,"(""prompt injection"" OR ""jailbreak"" OR ""indirect prompt injection"") AND (""LLM"" OR ""large language model"" OR ""agent"")","Período: 2023-2026; Categorias: cs.CR, cs.CL, cs.AI",295,BibTeX,
+Google Scholar,__/__/2026,"(""prompt injection"" OR jailbreak) (""large language model"" OR LLM OR ""AI agent"")",Período: 2023-2026; Ordenar por relevância,~5570 (selecionamos os top 250),BibTeX (Zotero connector),Limitado aos primeiros 100 resultados
+IEEE Xplore,__/__/2026,"(""prompt injection"" OR ""jailbreak"") AND (""large language model"" OR ""LLM"" OR ""agent"")","Período: 2023-2026; Content Type: Conferences, Journals",124,BibTeX,

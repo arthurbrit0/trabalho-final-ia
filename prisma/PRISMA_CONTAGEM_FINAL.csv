@@ -1,0 +1,20 @@
+Etapa,Variável,Valor,Descrição/Cálculo
+===== IDENTIFICAÇÃO =====,,,
+Bases de dados,A - Records identificados de bases,669,"arXiv (295) + Google Scholar (250 top) + IEEE Xplore (124)"
+Outros métodos,B - Records de outros métodos (snowballing),6,"OWASP, Tensor Trust, HackAPrompt, Spotlighting, McHugh, Kalliomäki"
+===== REMOÇÃO PRÉ-TRIAGEM =====,,,
+Duplicatas,C - Duplicatas removidas,35,Identificadas no Zotero
+Outros,D - Removidos por outros motivos,0,N/A
+===== TRIAGEM (TÍTULO/RESUMO) =====,,,
+Total para triagem,E - Records triados,640,"(A + B) - C - D = (669 + 6) - 35 - 0 = 640"
+Excluídos,F - Excluídos por título/resumo,588,"Critérios E1-E7 (principalmente E6 - fora do escopo)"
+===== ELEGIBILIDADE (TEXTO COMPLETO) =====,,,
+Buscados,G - Reports buscados para leitura,52,"E - F = 640 - 588"
+Não obtidos,H - Reports não obtidos (paywall/indisponível),3,PDFs não acessíveis
+Avaliados,I - Reports avaliados (texto completo),49,"G - H = 52 - 3"
+Excluídos,J - Excluídos após leitura completa,39,"E2 (só LLM sem segurança), E3 (sem método), E6 (fora do foco)"
+===== INCLUSÃO =====,,,
+Incluídos,K - Estudos incluídos na revisão,10,"I - J = 49 - 39 = 10 ✓"
+===== DETALHAMENTO DOS 10 INCLUÍDOS =====,,,
+Via bases,Papers das bases de dados,4,"Greshake, Liu (HOUYI), Naik, Gulyamov"
+Via snowballing,Papers de outros métodos,6,"OWASP, Toyer, Schulhoff, Hines, McHugh, Kalliomäki"
